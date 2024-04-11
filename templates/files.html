@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>serv</title>
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/assets/css/all.min.css">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        #title {
+            font-size: 1.75rem;
+            font-weight: lighter;
+            text-align: center;
+            margin-left: -10%;
+            color: #2F4F4F
+        }
+
+        .custom-icon-flex {
+            flex: 0 0 auto;
+            width: 30px;
+            text-align: center;
+        }
+
+        .custom-size-flex {
+            flex: auto;
+            width: 300px;
+            text-align: center;
+        }
+
+        img {
+            align-self: center;
+            margin-left: 10%;
+        }
+
+        header {
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            width: 100rem;
+        }
+
+    </style>
+
+</head>
+<body>
+<header class="d-flex p-3 sticky-top justify-content-center" style="margin: auto 0">
+    <h1 class="flex-grow-1 mb-0 text-center" id="title"> <img alt="logo" class="mr-2" src="/assets/images/logo.png" width="40"> Serv</h1>
+</header>
+
+<div class="container mt-4">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th scope="col" class="custom-icon-flex"></th>
+                <th scope="col" class="px-4">Name</th>
+                <th scope="col" class="custom-size-flex">Size</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in files %}
+                <tr>
+                    <td class="custom-icon-flex">
+                        {% if file.is_dir() %}
+                            <i class="far fa-folder fa-lg"></i>
+                        {% else %}
+                            <i class="far fa-file fa-lg"></i>
+                        {% endif %}
+                    </td>
+
+                    <td class="px-4">
+                        <a href="/{{ file.display() }}" class="text-dark">{{ file.display() }}</a>
+                    </td>
+
+                    <td class="px-4 custom-size-flex">
+                        {% if !file.is_dir() %}
+                            {% if let size = fs_utils::get_size(file) %}
+                                {{ fs_utils::human_readable_size(size) }}
+                            {% else %}
+                                 --
+                            {% endif %}
+                        {% else %}
+                            --
+
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>
