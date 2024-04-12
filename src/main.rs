@@ -7,14 +7,14 @@ use rocket as rkt;
 
 use askama_rocket::Template;
 use clap::Parser;
-use rocket::State;
-use rocket_include_static_resources::manifest_dir_macros::relative_path;
-use rocket_include_static_resources::static_resources_initializer;
+use rocket::{State, uri};
 use std::path::PathBuf;
 use std::process::exit;
 
 use rocket::fs::{FileServer, Options};
 use std::sync::{Arc, Mutex};
+use rocket::response::Redirect;
+use rocket_include_static_resources::manifest_dir_macros::relative_path;
 
 #[derive(Template)]
 #[template(path = "files.html")]
@@ -32,9 +32,27 @@ fn index(config_guard: &State<Arc<Mutex<config::ServConfig>>>) -> IndexTemplate 
     IndexTemplate { files: files.into_iter().map(PathBuf::from).collect() }
 }
 
+fn redirect_to_download(path: PathBuf) -> Redirect {
+    println!("Path: {}", path.display());
+    if path.display().to_string().trim() == "favicon.io".to_string() {
+        return Redirect::to(uri!("/favicon.ico"));
+    }
+    Redirect::to(format!("/files/{}", path.display()))
+}
+
+#[rkt::get("/<path..>", rank = 13)]
+fn file_redirect(path: PathBuf) -> Redirect {
+    redirect_to_download(path)
+}
+
 #[rkt::catch(404)]
 fn not_found() -> &'static str {
     "404 Not Found"
+}
+
+#[rkt::catch(422)]
+fn dotfile_attempt() -> &'static str {
+    "Sorry, dotfiles are not supported yet. Either rename the file on the host system or go directly to /files/<dotfile-name>"
 }
 
 #[rkt::launch]
@@ -48,17 +66,15 @@ fn launch() -> _ {
         exit(1);
     }
 
-    let config = config::ServConfig { path };
+    let config = config::ServConfig { path, port: matches.port };
 
     rkt::build()
+        .configure(rocket::Config::figment().merge(("port", config.port)))
         .attach(fairings::insert_config(config.clone()))
-        .attach(static_resources_initializer!("/favicon.ico" => "favicon.ico"))
-        .register("/", rkt::catchers![not_found])
-        .mount("/", rkt::routes![index])
-        .mount("/", FileServer::new(config.path, Options::NormalizeDirs | Options::DotFiles))
-
-        .mount(
-            "/assets",
-            FileServer::from(relative_path!("assets")).rank(11),
-        )
+        .attach(fairings::download())
+        .register("/", rkt::catchers![not_found, dotfile_attempt])
+        .mount("/files", FileServer::new(config.path, Options::DotFiles))
+        .mount("/favicon.ico", FileServer::new("favicon.ico", Options::IndexFile).rank(12))
+        .mount("/assets", FileServer::from(relative_path!("assets")).rank(11))
+        .mount("/", rkt::routes![index, file_redirect])
 }

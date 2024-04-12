@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use rocket::fairing::AdHoc;
-// use rocket::http::ContentType;
+use rocket::http::ContentType;
 use crate::config;
 
 pub fn insert_config(config: config::ServConfig) -> AdHoc {
@@ -9,11 +9,13 @@ pub fn insert_config(config: config::ServConfig) -> AdHoc {
 	})
 }
 
-/*
+
 pub fn download() -> AdHoc {
-	AdHoc::on_response("Download Files Correctly", |req, resp| async {
+	AdHoc::on_response("Download Files Correctly", |req, resp| Box::pin(async {
+		let uri = req.uri().to_string();
 
-	})
+		if uri.contains("/files/") {
+			resp.set_header(ContentType::Binary);
+		}
+	}))
 }
-
- */
