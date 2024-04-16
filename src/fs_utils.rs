@@ -1,20 +1,15 @@
-use std::{env, fs, io};
-use std::path::PathBuf;
 use human_bytes::human_bytes;
+use std::path::PathBuf;
+use std::{env, fs, io};
 
-
-pub fn walk_dir(dir: &PathBuf) -> io::Result<Vec<String>> {
+pub fn walk_dir(dir: &PathBuf) -> io::Result<Vec<PathBuf>> {
     let entries = fs::read_dir(dir)?;
 
-    let file_names: Vec<String> = entries
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-
-            path.file_name()?.to_str().map(|s| s.to_owned())
-        })
+    let paths: Vec<PathBuf> = entries
+        .filter_map(|entry| Some(entry.ok()?.path()))
         .collect();
 
-    Ok(file_names)
+    Ok(paths)
 }
 
 pub fn get_cwd() -> String {
@@ -24,7 +19,10 @@ pub fn get_cwd() -> String {
 
 // this is an unsafe function; only use it in templates.
 pub fn get_size(file: &PathBuf) -> u64 {
-    return fs::metadata(file).unwrap().len()
+    match fs::metadata(file) {
+        Ok(t) => t.len(),
+        Err(_) => 0,
+    }
 }
 
 pub fn human_readable_size(bytes: &u64) -> String {
@@ -40,4 +38,8 @@ pub fn is_file(path: &PathBuf) -> bool {
     }
 
     true
+}
+
+pub fn get_filename(path: &PathBuf) -> String {
+    return path.file_name().unwrap().to_str().unwrap().to_string();
 }

@@ -50,6 +50,8 @@
     <h1 class="flex-grow-1 mb-0 text-center" id="title"> <img alt="logo" class="mr-2" src="/assets/images/logo.png" width="40"> Serv</h1>
 </header>
 
+
+<h1>{{ message }}</h1>
 <div class="container mt-4">
     <table class="table table-hover">
         <thead>
@@ -71,7 +73,11 @@
                     </td>
 
                     <td class="px-4">
-                        <a href="/{{ file.display() }}" class="text-dark">{{ file.display() }}</a>
+                        <button class="border border-0 bg-white">
+                            <a href="/{{ file.strip_prefix(start_directory).unwrap().display() }}" class="text-dark">
+                                {{ fs_utils::get_filename(file) }}{% if file.is_dir() %}/{% endif %}
+                            </a>
+                        </button>
                     </td>
 
                     <td class="px-4 custom-size-flex">
