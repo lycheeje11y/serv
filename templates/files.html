@@ -24,6 +24,12 @@
             color: #2F4F4F
         }
 
+        #parent_button {
+            align-content: end;
+            padding-left: 10px;
+            padding-bottom: 20px;
+        }
+
         .custom-icon-flex {
             flex: 0 0 auto;
             width: 30px;
@@ -65,18 +71,23 @@
 
 
 <div class="container mt-4">
+
+
+
     <table class="table table-hover">
         <thead>
+            {% if parent_directory.is_some() %}
+                <tr>
+                    <th scope="col">
+                        {% let parent = parent_directory.as_ref().unwrap() %}
+                        <a href="/{{ parent.display() }}" id="parent_button"><i class="fas fa-arrow-left fa-lg"></i></a>
+                    </th>
+                </tr>
+            {% endif %}
             <tr>
                 <th scope="col" class="custom-icon-flex"><i class="fas fa-server fa-lg"></i></th>
                 <th scope="col" class="px-4">Filename</th>
                 <th scope="col" class="custom-size-flex">Size</th>
-
-
-                {% if parent_directory.is_some() %}
-                    {% let parent = parent_directory.as_ref().unwrap() %}
-                    <a href="/{{ parent.display() }}"><i class="fas fa-arrow-left fa-lg"></i></a>
-                {% endif %}
 
             </tr>
         </thead>
@@ -108,7 +119,6 @@
                             {% endif %}
                         {% else %}
                             --
-
                         {% endif %}
                     </td>
                 </tr>
