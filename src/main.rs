@@ -1,8 +1,6 @@
 mod cli;
 mod config;
-mod fairings;
 mod fs_utils;
-mod send_file;
 
 use rocket as rkt;
 use std::borrow::Cow;
@@ -10,17 +8,20 @@ use std::ffi::OsStr;
 
 use askama_rocket::Template;
 use clap::Parser;
-use rocket::{get, route, Data, Request, Route, State};
+use rocket::{get, Config, Data, Request, Route};
 use std::path::PathBuf;
 use std::process::exit;
 
 use crate::config::ServConfig;
-use rocket::http::uri::fmt::Path;
-use rocket::http::uri::Segments;
+use crate::fs_utils::get_parent_directory;
+use rocket::fs::NamedFile;
+use rocket::futures::lock::Mutex;
 use rocket::http::ContentType;
 use rocket::http::Method::Get;
+use rocket::response::Redirect;
+use rocket::route::{Handler, Outcome};
 use rust_embed::RustEmbed;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(RustEmbed)]
 #[folder = "assets"]
@@ -30,50 +31,53 @@ struct Asset;
 #[template(path = "files.html")]
 struct IndexTemplate {
     files: Vec<PathBuf>,
-    start_directory: PathBuf,
-    message: String,
+    directory: PathBuf,
+    parent_directory: Option<PathBuf>,
+    base_directory: PathBuf,
 }
-/*
-#[get("/")]
-fn index(config_guard: &State<Arc<Mutex<ServConfig>>>) -> IndexTemplate {
-    let config = config_guard.lock().unwrap();
-    let mut files = fs_utils::walk_dir(&config.base_directory).unwrap();
 
-    files.sort();
-    IndexTemplate {
-        files: files.into_iter().map(PathBuf::from).collect(),
-        start_directory: config.start_directory.clone(),
-        message: "hello".to_string()
-    }
-}
-*/
+#[derive(Clone)]
+struct CustomHandler();
 
-fn handler<'r>(req: &'r Request, _: Data<'r>) -> route::BoxFuture<'r> {
-    let config_binding = req.rocket().state::<Arc<Mutex<ServConfig>>>().unwrap();
-    let mut config = config_binding.lock().unwrap();
-    let mut files = fs_utils::walk_dir(&config.base_directory).unwrap();
-    let uri = req.uri().path();
-    let relative_requested_path = PathBuf::from(req.uri().to_string()).strip_prefix("/").unwrap().to_path_buf();
-    let requested_path = &config.base_directory.clone().join(&relative_requested_path);
-    let mut message: String = "no".to_string();
+#[rocket::async_trait]
+impl Handler for CustomHandler {
+    async fn handle<'r>(&self, req: &'r Request<'_>, _: Data<'r>) -> Outcome<'r> {
+        let config_binding = req.rocket().state::<Arc<Mutex<ServConfig>>>().unwrap();
+        let mut config = config_binding.lock().await;
+        let mut path = PathBuf::from(req.uri().to_string());
 
-    if uri.segments().len() != 0 {
-        if files.contains(requested_path) {
+        let mut requested_path: PathBuf = config.base_directory.clone();
+        let mut parent_directory: Option<PathBuf> = None;
+        let mut files: Vec<PathBuf>;
+
+        if path.starts_with("/") {
+            path = path.strip_prefix("/").unwrap().to_path_buf();
+        }
+
+        if fs_utils::is_valid_subpath(&path, &config.base_directory) {
+            requested_path = config.base_directory.join(path);
+
             if requested_path.is_dir() {
-                config.base_directory.push(requested_path);
-            } else {
-
+                parent_directory = get_parent_directory(&requested_path, &config.base_directory);
+            } else if requested_path.is_file() {
+                let file = NamedFile::open(requested_path).await;
+                return Outcome::from(req, (ContentType::Binary, file));
             }
         }
-    }
 
-    files.sort();
-    let template = IndexTemplate {
-        files: files.into_iter().map(PathBuf::from).collect(),
-        start_directory: config.start_directory.clone(),
-        message,
-    };
-    route::Outcome::from(req, template).pin()
+        return if requested_path.exists() {
+            files = fs_utils::walk_dir(&requested_path).unwrap();
+            let template = IndexTemplate {
+                files,
+                directory: requested_path,
+                parent_directory,
+                base_directory: config.base_directory.clone(),
+            };
+            Outcome::from(req, template)
+        } else {
+            Outcome::from(req, Redirect::permanent("/"))
+        };
+    }
 }
 
 #[get("/assets/<file..>")]
@@ -100,7 +104,7 @@ fn dotfile_attempt() -> &'static str {
 }
 
 #[rkt::launch]
-fn launch() -> _ {
+async fn launch() -> _ {
     let matches = cli::Cli::parse();
 
     let path = PathBuf::from(matches.path.unwrap_or(fs_utils::get_cwd()));
@@ -113,15 +117,18 @@ fn launch() -> _ {
 
     let config = ServConfig {
         base_directory: path.clone(),
-        start_directory: path,
         port,
     };
 
     rkt::build()
-        .configure(rocket::Config::figment().merge(("port", config.port)))
+        .configure(Config::figment().merge(("port", config.port)))
+        .configure(Config::figment().merge((Config::LOG_LEVEL, rkt::config::LogLevel::Off)))
         .manage(Arc::new(Mutex::new(config.clone())))
-        .attach(fairings::download())
+        //        .attach(fairings::download())
         .register("/", rkt::catchers![not_found, dotfile_attempt])
-        .mount("/", vec![Route::ranked(10, Get, "/<path..>", handler)])
+        .mount(
+            "/",
+            vec![Route::ranked(10, Get, "/<path..>", CustomHandler())],
+        )
         .mount("/", rkt::routes![assets])
 }

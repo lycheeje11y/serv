@@ -11,8 +11,16 @@
         #title {
             font-size: 1.75rem;
             font-weight: lighter;
-            text-align: center;
+            text-align: left;
             margin-left: -10%;
+            padding-left: 10%;
+            color: #2F4F4F
+        }
+
+        #current_dir {
+            font-size: 1rem;
+            font-weight: lighter;
+            text-align: center;
             color: #2F4F4F
         }
 
@@ -39,7 +47,9 @@
         }
 
         h1 {
-            width: 100rem;
+            white-space: nowrap;
+            padding-left: 50px;
+            padding-bottom: 20px;
         }
 
     </style>
@@ -47,18 +57,27 @@
 </head>
 <body>
 <header class="d-flex p-3 sticky-top justify-content-center" style="margin: auto 0">
-    <h1 class="flex-grow-1 mb-0 text-center" id="title"> <img alt="logo" class="mr-2" src="/assets/images/logo.png" width="40"> Serv</h1>
+    <div>
+        <h1 class="flex-grow-1 mb-0 text-center" id="title"> <img alt="logo" class="mr-2" src="/assets/images/logo.png" width="40"> Serv</h1>
+        <h5 class="flex-grow-1 mb-0 text-center" id="current_dir">Current Directory: {{ directory.display() }}</h5>
+    </div>
 </header>
 
 
-<h1>{{ message }}</h1>
 <div class="container mt-4">
     <table class="table table-hover">
         <thead>
             <tr>
-                <th scope="col" class="custom-icon-flex"></th>
-                <th scope="col" class="px-4">Name</th>
+                <th scope="col" class="custom-icon-flex"><i class="fas fa-server fa-lg"></i></th>
+                <th scope="col" class="px-4">Filename</th>
                 <th scope="col" class="custom-size-flex">Size</th>
+
+
+                {% if parent_directory.is_some() %}
+                    {% let parent = parent_directory.as_ref().unwrap() %}
+                    <a href="/{{ parent.display() }}"><i class="fas fa-arrow-left fa-lg"></i></a>
+                {% endif %}
+
             </tr>
         </thead>
         <tbody>
@@ -74,7 +93,7 @@
 
                     <td class="px-4">
                         <button class="border border-0 bg-white">
-                            <a href="/{{ file.strip_prefix(start_directory).unwrap().display() }}" class="text-dark">
+                            <a href="/{{ fs_utils::get_relative_path(file, base_directory).display() }}" class="text-dark">
                                 {{ fs_utils::get_filename(file) }}{% if file.is_dir() %}/{% endif %}
                             </a>
                         </button>
